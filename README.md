@@ -1,6 +1,6 @@
 # GuessGame
 
-a game loos like HEAD UP based on react native
+a game looks like `Heads Up` based on react native
 
 # develop
 
@@ -12,3 +12,4 @@ npm install
 react-native run-ios
 
 ```
+# 仿游戏疯狂来往
