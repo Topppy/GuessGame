@@ -1,0 +1,14 @@
+# GuessGame
+
+a game loos like HEAD UP based on react native
+
+# develop
+
+```bash
+// first time
+npm install
+
+// ios
+react-native run-ios
+
+```
