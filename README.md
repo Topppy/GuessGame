@@ -12,4 +12,7 @@ npm install
 react-native run-ios
 
 ```
+connect device
+change localhost to your ip in AppDelegate.m
+
 # 仿游戏疯狂来往
