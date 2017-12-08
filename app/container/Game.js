@@ -6,34 +6,9 @@ import { Accelerometer, Gyroscope } from 'react-native-sensors';
 
 import Card from '../components/Card';
 import questionStore from '../mock/index'
+import { getUnique } from '../core/utils'
 
-const isPeakPoint = (gObjPair) => {
-  const z1 = gObjPair[0]
-  const z2 = gObjPair[1]
-  // g +1 peak point
-  if (z1.pg > 0 && z1.cg > 0 && z2.pg > 0 && z2.cg > 0 && z1.acc > 0 && z2.acc < 0) {
-    return 1
-  }
-  // g -1 peak point
-  if (z1.pg < 0 && z1.cg < 0 && z2.pg < 0 && z2.cg < 0 && z1.acc < 0 && z2.acc > 0) {
-    return -1
-  }
-  return false
-}
 
-const getUnique = (arrayNum,count) => {
-  // Make a copy of the array
-  var tmp = arrayNum.slice();
-  var ret = [];
-  
-  for (var i = 0; i < count; i++) {
-    var index = Math.floor(Math.random() * tmp.length);
-    var removed = tmp.splice(index, 1);
-    // Since we are only removing one element
-    ret.push(removed[0]);
-  }
-  return ret;
-}
 
 export default class Game extends Component {
   // hide nav bar
@@ -41,7 +16,7 @@ export default class Game extends Component {
   constructor(props) {
     super(props)
     const {state} = this.props.navigation;
-    const qstList = questionStore[state.params.id]
+    const qstList = questionStore.filter((item) => item.id === state.params.id)[0]
     const randomQList = getUnique(qstList.data, 20)
     this.state = {
       randomQList,
@@ -54,74 +29,77 @@ export default class Game extends Component {
     }
     this.timer = 0
     this.countDown = 0
+    this.Hourglass = 15000
   }
   componentDidMount() {
-    const G = 0.7
-    const I = 1500
-    const Hourglass = 15000
 
     this.countDown = setTimeout(() => {
       this.accelerationObservable.stop();
       this.setState({showResult: true})
       clearTimeout(this.timer)
-    }, Hourglass)
+    }, this.Hourglass)
 
-    this.accelerationObservable = new Accelerometer({
-      updateInterval: 50, // defaults to 100ms
-    });
-    // Normal RxJS functions
-    this.accelerationObservable
-      .map(({ x, y, z }) => {
-        // console.log(x,y,z)
-        return z
-      })
-      .filter(z => (z > G || z < -G))
-      .pairwise()
-      .map(zpair => {
-        // console.log(zpair)
-        return {
-          pg: zpair[0],
-          cg: zpair[1],
-          acc: zpair[1] - zpair[0],
-        }
-      })
-      .pairwise()
-      .filter((gObjPair) => {
-        // console.log('filter pp',isPeakPoint(gObjPair), gObjPair)
-        return !!isPeakPoint(gObjPair)
-      })
-      .map((gObjPair) => {
-        // console.log('real pp',isPeakPoint(gObjPair))
-        return isPeakPoint(gObjPair)
-      })
-      .throttle(() => Rx.Observable.interval(I))
-      .subscribe(z => {
-        this.next(z)
-      });
+    const { statusList, cur } = this.state
+    this.addGWatch()
+
   }
   componentWillUnmount(){
     clearTimeout(this.countDown)
     clearTimeout(this.timer)
     this.accelerationObservable.stop();
   }
-  next(z) {
+  addGWatch = (curStatus) => {
+    const GH = [0.7, 1]
+    const GL = [0.1, 0.4]
+
+    this.accelerationObservable = new Accelerometer({
+      updateInterval: 100, // defaults to 100ms
+    });
+
+    // Normal RxJS functions
+    this.accelerationObservable
+      .map(({ x, y, z }) => {
+        // console.log(x,y,z)
+        return z
+      })
+      .flatMap((z) => {
+        const { statusList, cur } = this.state
+        curStatus = statusList[cur]
+        if ((curStatus === 'guessing') && z > GH[0] && z < GH[1]){
+          return Rx.Observable.of(1)
+        } else if ((curStatus === 'guessing') && -z > GH[0] && -z < GH[1]) {
+          return Rx.Observable.of(-1)
+        } else if ((('correct' === curStatus) || ('wrong'=== curStatus)) && ((z > GL[0] && z < GL[1]) || (-z > GL[0] && -z < GL[1]))) {
+          return Rx.Observable.of(0)
+        } else {
+          // console.log('z', z, 'curStatus', curStatus )
+          return Rx.Observable.empty()
+        }
+      })
+      .subscribe(z => {
+        if (z) {
+          console.log('change status',z)
+          this.changeStatus(z)
+        } else if (z === 0) {
+          console.log('next card')
+          this.nextCard()
+        }
+      })
+  }
+  changeStatus(z) {
     const temp = this.state.statusList.slice(0)
     temp[this.state.cur]= z > 0 ? 'correct' : 'wrong'
     console.log(this.state.cur, temp[this.state.cur] )
     this.setState({
       statusList: temp,
-      cur: this.state.cur +1,
       [temp[this.state.cur]]: this.state.correct +1,
-    }, () => {
-      this.timer = setTimeout(() => {
-        if (this.state.cur >= temp.length) {
-          this.accelerationObservable.stop();
-          this.setState({showResult: true})
-          return
-        }
-        this.swiperEle.scrollBy(1)
-      } , 200)
     })
+  }
+  nextCard() {
+    this.setState({
+      cur: this.state.cur +1,
+    })
+    this.swiperEle.scrollBy(1)
   }
   render() {
     const { navigate } = this.props.navigation;    
